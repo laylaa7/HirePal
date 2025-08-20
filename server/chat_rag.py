@@ -41,7 +41,7 @@ vector_store = VectorSearchVectorStore.from_components(
     project_id=PROJECT_ID,
     region=REGION,
 )
-retriever = vector_store.as_retriever(search_kwargs={"k": 20}, score_threshold = {0.2})
+retriever = vector_store.as_retriever(search_kwargs={"k": 8}, score_threshold = {0.5})
 
 # Chat model (Gemini on Vertex AI)
 llm = ChatVertexAI(
@@ -71,11 +71,42 @@ def ask(question: str, history: BaseChatMessageHistory) -> dict:
     """
     Sends a question to the RAG chatbot and returns a structured response.
     """
-    print(f"\n--- New Question: '{question}' ---")  # Debug print
-
-    # Retrieve relevant documents
+    print(f"\n--- New Question: '{question}' ---")
+    
+    # 1. SEMANTIC SEARCH: Get relevant chunks using vector similarity
     docs = retriever.invoke(question)
-    print(f"Number of CV chunks found: {len(docs)}")  # Debug print
+    print(f"Number of CV chunks found by semantic search: {len(docs)}")
+    
+    # --- HYBRID SEARCH: COMBINE SEMANTIC + KEYWORD FILTERING ---
+    # Detect if user is searching for a specific name
+    question_lower = question.lower()
+    name_keywords = ["name", "called", "named", "find", "search for", "who is"]
+    
+    if any(keyword in question_lower for keyword in name_keywords):
+        # Extract potential names (capitalized words that might be names)
+        potential_names = []
+        for word in question.split():
+            if word.istitle() and len(word) > 2:  # Simple name detection
+                potential_names.append(word.lower())
+        
+        print(f"Potential names detected: {potential_names}")
+        
+        if potential_names:
+            # Apply keyword filter ON TOP of semantic results
+            filtered_docs = []
+            for doc in docs:
+                doc_text_lower = doc.page_content.lower()
+                # Keep document if it contains ANY of the potential names
+                if any(name in doc_text_lower for name in potential_names):
+                    filtered_docs.append(doc)
+            
+            # ONLY replace results if we found keyword matches
+            # This preserves semantic search when no names are found in documents
+            if filtered_docs:
+                print(f"After keyword filtering: {len(filtered_docs)} chunks contain the name(s)")
+                docs = filtered_docs
+            else:
+                print("No documents contain the specified name(s), using semantic results only")  # Debug print
 
     # Format context for the LLM
     context = "\n\n---\n\n".join(
@@ -93,29 +124,101 @@ def ask(question: str, history: BaseChatMessageHistory) -> dict:
     history.add_user_message(question)
     history.add_ai_message(resp.content)
 
-    # --- NEW LOGIC: Always return structured data if we found CVs ---
-    if docs:  # Simplified condition: if we found any CV chunks
-        print("Found CVs. Returning candidate cards data.")  # Debug print
-        candidate_list = []
+    # --- INTENT DETECTION LOGIC --- 
+    # Define triggers for candidate search
+    search_intent_keywords = [
+        "find", "search", "show", "look for", "need", "hire", "recruit", "candidate", 
+        "developer", "engineer", "designer", "who has", "with experience", "skill", "java", 
+        "python", "react", "node", "aws", "sql", "experienced", "senior", "junior"
+    ]
+
+    # Define triggers for conversational intent (should NOT return candidates)
+    conversation_intent_keywords = [
+        "hello", "hi", "hey", "good morning", "good afternoon", "good evening",
+        "who are you", "what is your name", "how are you", "thank", "thanks", 
+        "bye", "goodbye", "ok", "okay", "yes", "no", "not sure", "explain", "what can you do"
+    ]
+
+    user_query_lower = question.lower()
+
+    # Check if this is clearly a conversation, not a search
+    is_conversation = any(keyword in user_query_lower for keyword in conversation_intent_keywords)
+
+    # Check if this is clearly a candidate search  
+    is_candidate_search = any(keyword in user_query_lower for keyword in search_intent_keywords)
+
+    # Check if the user is likely giving more context about a role
+    is_role_description = ("looking for" in user_query_lower or 
+                           "role is" in user_query_lower or 
+                           "position for" in user_query_lower)
+
+    print(f"Conversation intent: {is_conversation}")
+    print(f"Search intent: {is_candidate_search}")
+    print(f"Role description: {is_role_description}")
+
+    # DECISION TREE: Should we return candidates?
+    should_return_candidates = False
+
+    if is_conversation:
+        # Definitely don't return candidates for greetings/etc.
+        should_return_candidates = False
+    elif is_candidate_search:
+        # Definitely return candidates for clear search queries
+        should_return_candidates = True
+    elif is_role_description and docs:
+        # If user describes a role AND we found relevant CVs, return them
+        should_return_candidates = True  
+    elif not docs:
+        # If no CVs were found at all, never return candidates
+        should_return_candidates = False
+    else:
+        # Default: be conservative and don't return candidates for ambiguous queries
+        should_return_candidates = False
+
+    print(f"Decision: return candidates = {should_return_candidates}\n")
+    # --- END INTENT DETECTION LOGIC ---
+
+    # --- NEW LOGIC: Group chunks by CV file ---
+    if should_return_candidates:
+        print("Preparing candidate cards...")
+        candidate_dict = {}  # Key: filename, Value: {'doc': best_doc}
+
         for doc in docs:
-            filename = doc.metadata.get('filename', '')
-            # A simple cleanup: remove '.pdf' and common separators
-            name_from_file = filename.replace('.pdf', '').replace('_', ' ').replace('-', ' ').title()
+            filename = doc.metadata.get('filename', 'unknown.pdf')
             
-            # Try to extract a first name from the filename as a fallback
+            # Simple check if this is likely a CV file
+            if not filename.lower().endswith('.pdf'):
+                continue
+                
+            # If we haven't seen this CV, keep it
+            if filename not in candidate_dict:
+                candidate_dict[filename] = {
+                    'doc': doc,
+                }
+
+        # Get the best chunk for each unique CV
+        unique_candidate_docs = [info['doc'] for info in candidate_dict.values()]
+        print(f"Number of unique candidates found: {len(unique_candidate_docs)}")
+        
+        # Only take the top 5 most relevant unique candidates
+        top_candidates = unique_candidate_docs[:5]
+        
+        candidate_list = []
+        for doc in top_candidates:
+            filename = doc.metadata.get('filename', '')
+            name_from_file = filename.replace('.pdf', '').replace('_', ' ').replace('-', ' ').title()
             name_parts = name_from_file.split()
             first_name = name_parts[0] if name_parts else "Candidate"
 
-            # Create a candidate object for the frontend card.
             candidate_data = {
                 "id": str(uuid.uuid4()),
                 "name": name_from_file,
-                "role": "AI Candidate",  # You can make this more dynamic based on the content
+                "role": "Potential Candidate", 
                 "avatar": "",
-                "skills": extract_skills_from_text(doc.page_content),  # See function below
+                "skills": extract_skills_from_text(doc.page_content),
                 "location": "", 
                 "experience": "",
-                "cvUrl": f"gs://{BUCKET}/{filename}",  # Or doc.metadata.get('gcs_uri', '')
+                "cvUrl": f"gs://{BUCKET}/{filename}", 
                 "initials": ''.join([n[0] for n in name_from_file.split()[:2]]).upper(),
                 "gradientFrom": "#667eea",
                 "gradientTo": "#764ba2",
@@ -127,11 +230,11 @@ def ask(question: str, history: BaseChatMessageHistory) -> dict:
         return {
             "type": "candidates",
             "content": candidate_list,
-            "llmResponse": resp.content  # Also include the LLM's text summary
+            "llmResponse": resp.content 
         }
     else:
-        # If no CVs were found, return just the text
-        print("No CVs found. Returning text response only.")  # Debug print
+        # For conversational messages, return just the text response
+        print("Returning text response only.")
         return {
             "type": "text",
             "content": resp.content
