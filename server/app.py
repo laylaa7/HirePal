@@ -6,7 +6,7 @@ import uuid
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from typing import Dict
-
+from fastapi.middleware.cors import CORSMiddleware
 # Assuming your chat_rag.py is in the same directory
 from chat_rag import ask, InMemoryChatMessageHistory # Import the ask function and history classes
 
@@ -28,6 +28,18 @@ app = FastAPI(
     description="A simple API to interact with a CV-focused RAG chatbot with history persistence."
 )
 
+
+# Since nextjs is running on localhost:3000, we allow CORS for that origin
+# This is necessary for the frontend to communicate with the backend during development
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],  # Added 127.0.0.1 as well
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "OPTIONS"],  # Explicitly list methods
+    allow_headers=["*"],
+    expose_headers=["*"] # This can help with more complex scenarios
+)
+
 # A simple health check endpoint
 @app.get("/")
 def read_root():
@@ -44,6 +56,9 @@ def get_new_session():
     return {"session_id": session_id, "message": "New session created."}
 
 # Endpoint to handle user queries with history
+# app.py
+# ... (keep previous code)
+
 @app.post("/ask")
 def chat_with_bot_with_history(query: Query):
     """
@@ -52,23 +67,19 @@ def chat_with_bot_with_history(query: Query):
     session_id = query.session_id
     question = query.question
 
-    # Retrieve the chat history for the given session ID
     if session_id not in chat_histories:
-        raise HTTPException(
-            status_code=404,
-            detail=f"Session ID '{session_id}' not found. Please start a new session."
-        )
+        raise HTTPException(status_code=404, detail="Session not found.")
 
     session_history = chat_histories[session_id]
 
     try:
-        # Call the ask function, passing the session history object
-        response = ask(question, session_history)
-        return {"response": response}
+        # Call the ask function, which now returns a dict
+        response_data = ask(question, session_history) # This is now a dictionary
+        return response_data # Return the dict directly, FastAPI will convert to JSON
     except Exception as e:
-        # Handle any potential errors gracefully
-        return {"error": str(e)}, 500
-
+        # Return a structured error as well
+        return {"type": "error", "content": f"An error occurred: {str(e)}"}
+    
 if __name__ == "__main__":
     # Get the port from an environment variable, default to 8000
     port = int(os.environ.get("PORT", 8000))

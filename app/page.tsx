@@ -6,6 +6,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
+import axios from 'axios';
 import {
   FileText,
   MapPin,
@@ -54,6 +55,8 @@ interface ChatHistory {
   timestamp: Date
   messageCount: number
 }
+
+const API_BASE_URL = 'http://localhost:8000'; // Your FastAPI server's address
 
 const mockCandidates: Candidate[] = [
   {
@@ -155,32 +158,115 @@ export default function HirePalChat() {
     scrollToBottom()
   }, [messages])
 
-  const handleSendMessage = () => {
-    if (!inputValue.trim()) return
 
-    const userMessage: Message = {
-      id: Date.now().toString(),
-      type: "user",
-      content: inputValue,
-      timestamp: new Date(),
-    }
-
-    setMessages((prev) => [...prev, userMessage])
-    setInputValue("")
-
-    // Simulate bot response with candidates
-    setTimeout(() => {
-      const botMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        type: "bot",
-        content: "Great! I found some excellent candidates for this role. Here are the top matches:",
-        candidates: mockCandidates,
-        timestamp: new Date(),
-      }
-      setMessages((prev) => [...prev, botMessage])
-      setCurrentCandidateIndex((prev) => ({ ...prev, [botMessage.id]: 0 }))
-    }, 1000)
+  const getOrCreateSession = async (): Promise<string> => {
+  if (currentChatId) {
+    return currentChatId;
   }
+
+  const maxRetries = 3;
+  const retryDelay = 1000; // 1 second
+
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      console.log(`Attempting to create session (Attempt ${attempt})...`);
+      const response = await axios.get(`${API_BASE_URL}/new_session`);
+      const newSessionId = response.data.session_id;
+      setCurrentChatId(newSessionId);
+      console.log("Session created successfully:", newSessionId);
+      return newSessionId;
+    } catch (error: any) {
+      console.error(`Attempt ${attempt} failed:`, error.message);
+
+      if (attempt === maxRetries) {
+        // Final attempt failed
+        console.error("All attempts to create a session failed. Using fallback ID.");
+        const fallbackId = `fallback-${Date.now()}`;
+        setCurrentChatId(fallbackId);
+        return fallbackId;
+      }
+
+      // Wait before retrying
+      await new Promise(resolve => setTimeout(resolve, retryDelay * attempt));
+    }
+  }
+  // This line should theoretically never be reached, but TypeScript wants a return
+  const fallbackId = `fallback-${Date.now()}`;
+  setCurrentChatId(fallbackId);
+  return fallbackId;
+};
+
+  const handleSendMessage = async () => {
+  if (!inputValue.trim()) return;
+
+  const userMessage: Message = {
+    id: Date.now().toString(),
+    type: "user",
+    content: inputValue,
+    timestamp: new Date(),
+  };
+
+  setMessages((prev) => [...prev, userMessage]);
+  setInputValue(""); // Clear input immediately
+
+  try {
+   // 1. Get a session ID for this conversation
+const currentSessionId = await getOrCreateSession(); // Rename to avoid confusion
+
+// 2. Send the user's question to your backend API
+const response = await axios.post(`${API_BASE_URL}/ask`, {
+  session_id: currentSessionId,  // <-- Use the variable we just got
+  question: inputValue,
+});
+
+// 3. Handle the STRUCTURED response from the backend
+const responseData = response.data;
+
+if (responseData.type === 'text') {
+  // If it's a simple text response, show it in a bubble
+  const botMessage: Message = {
+    id: (Date.now() + 1).toString(),
+    type: 'bot',
+    content: responseData.content,
+    timestamp: new Date(),
+  };
+  setMessages((prev) => [...prev, botMessage]);
+} else if (responseData.type === 'candidates') {
+  // If it's a list of candidates, create a special bot message with the data
+  const botMessage: Message = {
+    id: (Date.now() + 1).toString(),
+    type: 'bot',
+    content: `I found ${responseData.content.length} potential candidates for you.`, // SHORT, CLEAN MESSAGE
+    candidates: responseData.content, // This is the array of candidate objects
+    timestamp: new Date(),
+  };
+  setMessages((prev) => [...prev, botMessage]);
+  // Initialize the current index for swiping through these new candidates
+  setCurrentCandidateIndex((prev) => ({ ...prev, [botMessage.id]: 0 }));
+} else if (responseData.type === 'error') {
+  // Handle errors from the backend
+  const errorMessage: Message = {
+    id: (Date.now() + 1).toString(),
+    type: 'bot',
+    content: responseData.content,
+    timestamp: new Date(),
+  };
+  setMessages((prev) => [...prev, errorMessage]);
+}
+
+  } catch (error) {
+    console.error("Error sending message to API:", error);
+
+    // 5. (Optional) Show an error message to the user if the API call fails
+    const errorMessage: Message = {
+      id: (Date.now() + 1).toString(),
+      type: "bot",
+      content: "Sorry, I'm having trouble connecting to the server. Please try again shortly.",
+      timestamp: new Date(),
+    };
+    setMessages((prev) => [...prev, errorMessage]);
+  }
+};
 
   const handleSwipe = (candidateId: string, direction: "left" | "right", messageId: string) => {
     setSwipeDirection((prev) => ({ ...prev, [candidateId]: direction }))

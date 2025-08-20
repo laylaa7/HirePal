@@ -3,11 +3,12 @@ from typing import List
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.chat_history import BaseChatMessageHistory
 from langchain_core.chat_history import InMemoryChatMessageHistory
-
 from langchain_google_vertexai import ChatVertexAI, VertexAIEmbeddings
 from langchain_google_vertexai.vectorstores import VectorSearchVectorStore
 from google.cloud import aiplatform
-
+import uuid  # <-- ADD THIS IMPORT
+from typing import List, Dict  # You might want to add Dict for type hinting too
+from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from config_manager import ConfigManager
 
 # Get the single instance of the configuration
@@ -64,35 +65,89 @@ prompt = ChatPromptTemplate.from_messages([
     ("system", "Context chunks:\n{context}")
 ])
 
-def ask(question: str, history: BaseChatMessageHistory) -> str:
+# file: chat_rag.py
+# ... (keep previous imports)
+def ask(question: str, history: BaseChatMessageHistory) -> dict:
     """
-    Sends a question to the RAG chatbot and returns the response, maintaining history.
-    
-    Args:
-        question (str): The user's question.
-        history (BaseChatMessageHistory): The conversation history object for the session.
+    Sends a question to the RAG chatbot and returns a structured response.
+    """
+    print(f"\n--- New Question: '{question}' ---")  # Debug print
 
-    Returns:
-        str: The chatbot's response.
-    """
-    # retrieve relevant documents based on the user's question
-    docs = retriever.invoke(question) 
-    
-    # format the retrieved documents into a context string for the model
+    # Retrieve relevant documents
+    docs = retriever.invoke(question)
+    print(f"Number of CV chunks found: {len(docs)}")  # Debug print
+
+    # Format context for the LLM
     context = "\n\n---\n\n".join(
         f"[{i+1}] {d.page_content[:1200]}\n(source: {d.metadata.get('filename')})"
         for i, d in enumerate(docs)
     )
-    
-    # build the full messages list for the model, including history and context
+
+    # Build the messages for the LLM
     msgs = prompt.format_messages(history=history.messages, question=question, context=context)
-    
-    # call the language model to generate a response
+
+    # Get the LLM's text response
     resp = llm.invoke(msgs)
-    
-    # update the conversation history with the user's message and the AI's response
+
+    # Update history
     history.add_user_message(question)
     history.add_ai_message(resp.content)
-    
-    return resp.content
 
+    # --- NEW LOGIC: Always return structured data if we found CVs ---
+    if docs:  # Simplified condition: if we found any CV chunks
+        print("Found CVs. Returning candidate cards data.")  # Debug print
+        candidate_list = []
+        for doc in docs:
+            filename = doc.metadata.get('filename', '')
+            # A simple cleanup: remove '.pdf' and common separators
+            name_from_file = filename.replace('.pdf', '').replace('_', ' ').replace('-', ' ').title()
+            
+            # Try to extract a first name from the filename as a fallback
+            name_parts = name_from_file.split()
+            first_name = name_parts[0] if name_parts else "Candidate"
+
+            # Create a candidate object for the frontend card.
+            candidate_data = {
+                "id": str(uuid.uuid4()),
+                "name": name_from_file,
+                "role": "AI Candidate",  # You can make this more dynamic based on the content
+                "avatar": "",
+                "skills": extract_skills_from_text(doc.page_content),  # See function below
+                "location": "", 
+                "experience": "",
+                "cvUrl": f"gs://{BUCKET}/{filename}",  # Or doc.metadata.get('gcs_uri', '')
+                "initials": ''.join([n[0] for n in name_from_file.split()[:2]]).upper(),
+                "gradientFrom": "#667eea",
+                "gradientTo": "#764ba2",
+                "text": doc.page_content[:500] + "..." if len(doc.page_content) > 500 else doc.page_content
+            }
+            candidate_list.append(candidate_data)
+        
+        # Return structured data for candidate cards
+        return {
+            "type": "candidates",
+            "content": candidate_list,
+            "llmResponse": resp.content  # Also include the LLM's text summary
+        }
+    else:
+        # If no CVs were found, return just the text
+        print("No CVs found. Returning text response only.")  # Debug print
+        return {
+            "type": "text",
+            "content": resp.content
+        }
+
+# Helper function to extract skills (optional but makes cards much better)
+def extract_skills_from_text(text: str) -> list:
+    """A simple function to extract potential skills from CV text."""
+    skills_keywords = ["python", "java", "react", "node", "js", "javascript", "machine learning", "ai", 
+                      "tensorflow", "pytorch", "sql", "aws", "docker", "kubernetes", "git", 
+                      "c++", "html", "css", "fastapi", "django", "flask", "vue", "angular"]
+    found_skills = []
+    text_lower = text.lower()
+    for skill in skills_keywords:
+        if skill in text_lower:
+            # Capitalize the skill for display
+            found_skills.append(skill.title())
+    # Return unique skills, max 5 to not overcrowd the card
+    return list(set(found_skills))[:5]
