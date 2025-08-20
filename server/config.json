@@ -1,0 +1,6 @@
+{
+  "PROJECT_ID": "deloitte-grad-project-469111",
+  "REGION": "europe-west4",
+  "BUCKET_URI": "gs://cv-bucket-rag",
+  "DIMENSIONS": 768
+}

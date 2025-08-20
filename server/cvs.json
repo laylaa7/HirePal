@@ -1,0 +1,14 @@
+[
+  {
+    "name": "Alice Johnson",
+    "text": "Alice is a software engineer with 3 years of experience in web development using React and Node.js. She built an e-commerce website project."
+  },
+  {
+    "name": "Bob Smith",
+    "text": "Bob is a data scientist skilled in Python, machine learning, and data visualization. He worked on predicting customer churn."
+  },
+  {
+    "name": "Charlie Lee",
+    "text": "Charlie is a backend developer experienced in Java, Spring Boot, and databases. He designed scalable APIs for banking systems."
+  }
+]
