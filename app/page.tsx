@@ -7,6 +7,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import axios from 'axios';
+import { transformBackendCandidate, type BackendCandidate } from '@/lib/candidateUtils';
 import {
   FileText,
   MapPin,
@@ -27,17 +28,17 @@ import {
 } from "lucide-react"
 
 interface Candidate {
-  id: string
-  name: string
-  role: string
-  avatar: string
-  skills: string[]
-  location: string
-  experience: string
-  cvUrl: string
-  initials: string
-  gradientFrom: string
-  gradientTo: string
+  id: string;
+  name: string;
+  role: string;
+  avatar: string;
+  skills: string[];
+  location: string;
+  experience: string;
+  cvUrl: string;
+  initials: string;
+  gradientFrom: string;
+  gradientTo: string;
 }
 
 interface Message {
@@ -58,47 +59,7 @@ interface ChatHistory {
 
 const API_BASE_URL = 'http://localhost:8000'; // Your FastAPI server's address
 
-const mockCandidates: Candidate[] = [
-  {
-    id: "1",
-    name: "Sarah Chen",
-    role: "Senior Software Engineer",
-    avatar: "/professional-woman-developer.png",
-    skills: ["React", "TypeScript", "Node.js", "AWS"],
-    location: "San Francisco, CA",
-    experience: "5+ years",
-    cvUrl: "/mock-cv.pdf",
-    initials: "SC",
-    gradientFrom: "#667eea",
-    gradientTo: "#764ba2",
-  },
-  {
-    id: "2",
-    name: "Marcus Johnson",
-    role: "Full Stack Developer",
-    avatar: "/professional-man-developer.png",
-    skills: ["Python", "Django", "PostgreSQL", "Docker"],
-    location: "New York, NY",
-    experience: "4+ years",
-    cvUrl: "/mock-cv.pdf",
-    initials: "MJ",
-    gradientFrom: "#f093fb",
-    gradientTo: "#f5576c",
-  },
-  {
-    id: "3",
-    name: "Elena Rodriguez",
-    role: "Frontend Developer",
-    avatar: "/professional-woman-frontend-developer.png",
-    skills: ["Vue.js", "JavaScript", "CSS", "Figma"],
-    location: "Austin, TX",
-    experience: "3+ years",
-    cvUrl: "/mock-cv.pdf",
-    initials: "ER",
-    gradientFrom: "#4facfe",
-    gradientTo: "#00f2fe",
-  },
-]
+
 
 const mockChatHistory: ChatHistory[] = [
   {
@@ -125,6 +86,32 @@ const mockChatHistory: ChatHistory[] = [
 ]
 
 export default function HirePalChat() {
+  const findCandidateByCvUrl = (cvUrl: string): Candidate | undefined => {
+    for (const message of messages) {
+      if (message.candidates && message.candidates.length > 0) {
+        const candidate = message.candidates.find((c) => c.cvUrl === cvUrl);
+        if (candidate) return candidate;
+      }
+    }
+    return undefined;
+  };
+
+  // Add this component near the top of your HirePalChat component
+const TypingIndicator = () => (
+  <div className="flex justify-start">
+    <div className="max-w-xs lg:max-w-md px-5 py-3 rounded-3xl bg-white/90 backdrop-blur-xl text-gray-900 shadow-lg border border-gray-100/50">
+      <div className="flex items-center space-x-2">
+        <div className="flex space-x-1">
+          <div className="w-2 h-2 bg-[#86BC25] rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+          <div className="w-2 h-2 bg-[#86BC25] rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+          <div className="w-2 h-2 bg-[#86BC25] rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+        </div>
+        <span className="text-sm font-medium text-gray-600">HirePal is thinking...</span>
+      </div>
+    </div>
+  </div>
+);
+
   const [messages, setMessages] = useState<Message[]>([
     {
       id: "1",
@@ -133,6 +120,14 @@ export default function HirePalChat() {
       timestamp: new Date(),
     },
   ])
+
+  // Add these state variables near your other state declarations
+  // Add these state variables near your other state declarations
+
+  // Add this state variable near your other state declarations
+  const [isTyping, setIsTyping] = useState(false);
+  const [shortlistedCandidates, setShortlistedCandidates] = useState<Candidate[]>([]);
+  const [showShortlistedModal, setShowShortlistedModal] = useState(false);
   const [inputValue, setInputValue] = useState("")
   const [selectedCv, setSelectedCv] = useState<string | null>(null)
   const [currentCandidateIndex, setCurrentCandidateIndex] = useState<{ [messageId: string]: number }>({})
@@ -158,6 +153,22 @@ export default function HirePalChat() {
     scrollToBottom()
   }, [messages])
 
+  // Add this useEffect near your other useEffect hooks
+useEffect(() => {
+  if (selectedCv) {
+    // Add event listener for PDF navigation
+    const handleMessage = (event: MessageEvent) => {
+      const iframe = document.getElementById('pdf-preview') as HTMLIFrameElement;
+      if (iframe?.contentWindow && event.source === iframe.contentWindow) {
+        // Handle PDF page change events if needed
+        console.log('PDF page changed:', event.data);
+      }
+    };
+
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
+  }
+}, [selectedCv]);
 
   const getOrCreateSession = async (): Promise<string> => {
   if (currentChatId) {
@@ -196,7 +207,7 @@ export default function HirePalChat() {
   return fallbackId;
 };
 
-  const handleSendMessage = async () => {
+const handleSendMessage = async () => {
   if (!inputValue.trim()) return;
 
   const userMessage: Message = {
@@ -209,55 +220,60 @@ export default function HirePalChat() {
   setMessages((prev) => [...prev, userMessage]);
   setInputValue(""); // Clear input immediately
 
+  // Show typing indicator
+  setIsTyping(true);
+
   try {
-   // 1. Get a session ID for this conversation
-const currentSessionId = await getOrCreateSession(); // Rename to avoid confusion
+    // 1. Get a session ID for this conversation
+    const currentSessionId = await getOrCreateSession();
 
-// 2. Send the user's question to your backend API
-const response = await axios.post(`${API_BASE_URL}/ask`, {
-  session_id: currentSessionId,  // <-- Use the variable we just got
-  question: inputValue,
-});
+    // 2. Send the user's question to your backend API
+    const response = await axios.post(`${API_BASE_URL}/ask`, {
+      session_id: currentSessionId,
+      question: inputValue,
+    });
 
-// 3. Handle the STRUCTURED response from the backend
-const responseData = response.data;
+    // 3. Handle the STRUCTURED response from the backend
+    const responseData = response.data;
 
-if (responseData.type === 'text') {
-  // If it's a simple text response, show it in a bubble
-  const botMessage: Message = {
-    id: (Date.now() + 1).toString(),
-    type: 'bot',
-    content: responseData.content,
-    timestamp: new Date(),
-  };
-  setMessages((prev) => [...prev, botMessage]);
-} else if (responseData.type === 'candidates') {
-  // If it's a list of candidates, create a special bot message with the data
-  const botMessage: Message = {
-    id: (Date.now() + 1).toString(),
-    type: 'bot',
-    content: `I found ${responseData.content.length} potential candidates for you.`, // SHORT, CLEAN MESSAGE
-    candidates: responseData.content, // This is the array of candidate objects
-    timestamp: new Date(),
-  };
-  setMessages((prev) => [...prev, botMessage]);
-  // Initialize the current index for swiping through these new candidates
-  setCurrentCandidateIndex((prev) => ({ ...prev, [botMessage.id]: 0 }));
-} else if (responseData.type === 'error') {
-  // Handle errors from the backend
-  const errorMessage: Message = {
-    id: (Date.now() + 1).toString(),
-    type: 'bot',
-    content: responseData.content,
-    timestamp: new Date(),
-  };
-  setMessages((prev) => [...prev, errorMessage]);
-}
+    if (responseData.type === 'error') {
+      // Handle errors from the backend
+      const errorMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        type: 'bot',
+        content: responseData.content,
+        timestamp: new Date(),
+      };
+      setMessages((prev) => [...prev, errorMessage]);
+    } else if (responseData.type === 'candidates' && responseData.candidates && responseData.candidates.length > 0) {
+      // Transform backend candidates to frontend format
+      const transformedCandidates = responseData.candidates.map((candidate: BackendCandidate) => 
+        transformBackendCandidate(candidate)
+      );
+
+      const botMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        type: 'bot',
+        content: responseData.reply || `I found ${transformedCandidates.length} potential candidates for you.`,
+        candidates: transformedCandidates,
+        timestamp: new Date(),
+      };
+      setMessages((prev) => [...prev, botMessage]);
+      setCurrentCandidateIndex((prev) => ({ ...prev, [botMessage.id]: 0 }));
+    } else {
+      // Text-only response
+      const botMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        type: 'bot',
+        content: responseData.reply || responseData.content,
+        timestamp: new Date(),
+      };
+      setMessages((prev) => [...prev, botMessage]);
+    }
 
   } catch (error) {
     console.error("Error sending message to API:", error);
 
-    // 5. (Optional) Show an error message to the user if the API call fails
     const errorMessage: Message = {
       id: (Date.now() + 1).toString(),
       type: "bot",
@@ -265,44 +281,67 @@ if (responseData.type === 'text') {
       timestamp: new Date(),
     };
     setMessages((prev) => [...prev, errorMessage]);
+  } finally {
+    // Always hide typing indicator, whether success or error
+    setIsTyping(false);
   }
 };
 
   const handleSwipe = (candidateId: string, direction: "left" | "right", messageId: string) => {
-    setSwipeDirection((prev) => ({ ...prev, [candidateId]: direction }))
+  setSwipeDirection((prev) => ({ ...prev, [candidateId]: direction }))
 
-    const action = direction === "right" ? "shortlisted" : "rejected"
-    setCandidateActions((prev) => ({ ...prev, [candidateId]: action }))
+  const action = direction === "right" ? "shortlisted" : "rejected"
+  setCandidateActions((prev) => ({ ...prev, [candidateId]: action }))
 
-    if (direction === "left") {
-      setRecentlyRejected({ candidateId, messageId, timestamp: Date.now() })
-      setTimeout(() => {
-        setRecentlyRejected((prev) => (prev?.candidateId === candidateId ? null : prev))
-      }, 5000)
+  // Save shortlisted candidate
+  if (direction === "right") {
+    // Find the candidate from all messages
+    let foundCandidate: Candidate | undefined;
+    for (const message of messages) {
+      if (message.candidates && message.candidates.length > 0) {
+        foundCandidate = message.candidates.find((c) => c.id === candidateId);
+        if (foundCandidate) break;
+      }
+    }
+    
+    if (foundCandidate) {
+      setShortlistedCandidates(prev => {
+        // Avoid duplicates
+        if (!prev.some(c => c.id === foundCandidate!.id)) {
+          return [...prev, foundCandidate!];
+        }
+        return prev;
+      });
+    }
+  }
+
+  if (direction === "left") {
+    setRecentlyRejected({ candidateId, messageId, timestamp: Date.now() })
+    setTimeout(() => {
+      setRecentlyRejected((prev) => (prev?.candidateId === candidateId ? null : prev))
+    }, 5000)
+  }
+
+  setTimeout(() => {
+    const currentIndex = currentCandidateIndex[messageId] || 0
+    const candidates = messages.find((m) => m.id === messageId)?.candidates || []
+
+    if (currentIndex < candidates.length - 1) {
+      setCurrentCandidateIndex((prev) => ({ ...prev, [messageId]: currentIndex + 1 }))
+    } else {
+      const completionMessage: Message = {
+        id: (Date.now() + Math.random()).toString(),
+        type: "bot",
+        content:
+          "Great! You've reviewed all candidates. Would you like me to find more matches or help with the next steps?",
+        timestamp: new Date(),
+      }
+      setMessages((prev) => [...prev, completionMessage])
     }
 
-    const candidate = mockCandidates.find((c) => c.id === candidateId)
-
-    setTimeout(() => {
-      const currentIndex = currentCandidateIndex[messageId] || 0
-      const candidates = messages.find((m) => m.id === messageId)?.candidates || []
-
-      if (currentIndex < candidates.length - 1) {
-        setCurrentCandidateIndex((prev) => ({ ...prev, [messageId]: currentIndex + 1 }))
-      } else {
-        const completionMessage: Message = {
-          id: (Date.now() + Math.random()).toString(),
-          type: "bot",
-          content:
-            "Great! You've reviewed all candidates. Would you like me to find more matches or help with the next steps?",
-          timestamp: new Date(),
-        }
-        setMessages((prev) => [...prev, completionMessage])
-      }
-
-      setSwipeDirection((prev) => ({ ...prev, [candidateId]: null }))
-    }, 400)
-  }
+    setSwipeDirection((prev) => ({ ...prev, [candidateId]: null }))
+  }, 400)
+}
 
   const handleUndo = () => {
     if (!recentlyRejected) return
@@ -317,14 +356,21 @@ if (responseData.type === 'text') {
     setRecentlyRejected(null)
   }
 
-  const handleDownloadCV = (candidate: Candidate) => {
-    const link = document.createElement("a")
-    link.href = candidate.cvUrl
-    link.download = `${candidate.name.replace(" ", "_")}_CV.pdf`
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
-  }
+const handleDownloadCV = (candidate: Candidate) => {
+  // Since we're using real GCS URLs now, we can directly download
+  const link = document.createElement("a");
+  link.href = candidate.cvUrl;
+  link.target = "_blank"; // Open in new tab for PDF viewing
+  link.rel = "noopener noreferrer";
+  
+  // Try to suggest a download filename
+  const fileName = `${candidate.name.replace(/\s+/g, '_')}_CV.pdf`;
+  link.download = fileName;
+  
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+};
 
   const handleNewChat = () => {
     // Save current chat to history if it has messages
@@ -420,7 +466,7 @@ if (responseData.type === 'text') {
             <div className="text-center space-y-3">
               <h3 className="font-bold text-xl text-[#0F0B0B] tracking-tight">{candidate.name}</h3>
               <p className="text-gray-600 font-semibold text-base">{candidate.role}</p>
-              <div className="flex flex-col space-y-2 text-sm">
+              {/* <div className="flex flex-col space-y-2 text-sm">
                 <div className="flex items-center justify-center text-gray-500 space-x-2">
                   <MapPin className="w-4 h-4 text-gray-400" />
                   <span className="font-medium">{candidate.location}</span>
@@ -429,7 +475,7 @@ if (responseData.type === 'text') {
                   <Briefcase className="w-4 h-4 text-gray-400" />
                   <span className="font-medium">{candidate.experience}</span>
                 </div>
-              </div>
+              </div> */}
             </div>
 
             <div className="flex flex-wrap gap-2 justify-center max-w-full">
@@ -592,12 +638,12 @@ if (responseData.type === 'text') {
               </div>
               <div>
                 <h1 className="font-bold text-[#0F0B0B] text-lg tracking-tight">HirePal</h1>
-                <p className="text-sm text-gray-500 font-medium">Deloitte Recruiting Assistant</p>
+                <p className="text-sm text-gray-500 font-medium">Talent Acquisition Assistant </p>
               </div>
             </div>
             <div className="text-right">
               <div className="font-bold text-lg text-[#0F0B0B]">Deloitte</div>
-              <div className="text-xs text-gray-500 font-medium tracking-wider">DIGITAL</div>
+              <div className="text-xs text-gray-500 font-medium tracking-wider">Smarter hiring</div>
             </div>
           </div>
         </div>
@@ -651,35 +697,197 @@ if (responseData.type === 'text') {
               </div>
             </div>
           ))}
+          {/* Typing Indicator */}
+  {isTyping && <TypingIndicator />}
+
           <div ref={messagesEndRef} />
         </div>
 
-        <Dialog open={!!selectedCv} onOpenChange={() => setSelectedCv(null)}>
-          <DialogContent className="max-w-4xl max-h-[90vh] bg-white/98 backdrop-blur-xl border-0 shadow-2xl">
-            <DialogHeader className="flex flex-row items-center justify-between">
-              <DialogTitle className="text-xl font-bold text-gray-900">Candidate CV</DialogTitle>
-              <Button
-                onClick={() => {
-                  const candidate = mockCandidates.find((c) => c.cvUrl === selectedCv)
-                  if (candidate) handleDownloadCV(candidate)
-                }}
-                className="bg-gradient-to-r from-[#86BC25] to-[#7AA622] hover:from-[#7AA622] hover:to-[#6B9419] text-white shadow-lg hover:shadow-xl transition-all duration-200 font-semibold"
-              >
-                <Download className="w-4 h-4 mr-2" />
-                Download CV
-              </Button>
-            </DialogHeader>
-            <div className="flex-1 bg-gradient-to-br from-gray-50 to-gray-100 rounded-2xl p-12 text-center border border-gray-200/50 max-w-md mx-auto">
-              <FileText className="w-24 h-24 mx-auto text-gray-400 mb-6" />
-              <p className="text-gray-700 text-xl font-semibold mb-2">CV Preview</p>
-              <p className="text-sm text-gray-500 font-medium">PDF viewer would be integrated here in production</p>
-              <div className="mt-8 p-6 bg-white/80 rounded-xl border border-gray-200/50 max-w-md mx-auto">
-                <p className="text-xs text-gray-600 font-medium">Click "Download CV" above to save the full document</p>
-              </div>
-            </div>
-          </DialogContent>
-        </Dialog>
+       <Dialog open={!!selectedCv} onOpenChange={() => setSelectedCv(null)}>
+  <DialogContent className="max-w-6xl max-h-[90vh] bg-white/98 backdrop-blur-xl border-0 shadow-2xl p-0 overflow-hidden">
+    <DialogHeader className="flex flex-row items-center justify-between p-6 border-b border-gray-200/50">
+      <DialogTitle className="text-xl font-bold text-gray-900">Candidate CV Preview</DialogTitle>
+      <Button
+        onClick={() => {
+          const candidate = findCandidateByCvUrl(selectedCv!);
+          if (candidate) handleDownloadCV(candidate);
+        }}
+        className="bg-gradient-to-r from-[#86BC25] to-[#7AA622] hover:from-[#7AA622] hover:to-[#6B9419] text-white shadow-lg hover:shadow-xl transition-all duration-200 font-semibold"
+      >
+        <Download className="w-4 h-4 mr-2" />
+        Download CV
+      </Button>
+    </DialogHeader>
+    
+    <div className="flex-1 h-[70vh] bg-gray-100 relative">
+      {/* Loading state - show only when selectedCv exists but iframe might still be loading */}
+      {selectedCv && (
+        <div className="absolute inset-0 flex items-center justify-center bg-white/80 backdrop-blur-sm transition-opacity duration-300 z-10" 
+             id="pdf-loading">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#86BC25] mx-auto mb-4"></div>
+            <p className="text-gray-600 font-medium">Loading CV preview...</p>
+          </div>
+        </div>
+      )}
 
+      {/* PDF Preview - only render when selectedCv has a value */}
+      {selectedCv && (
+        <iframe
+          id="pdf-preview"
+          src={`${selectedCv}#toolbar=0&navpanes=0&scrollbar=0`}
+          className="w-full h-full border-0"
+          title="CV Preview"
+          onLoad={() => {
+            // Hide loading state when PDF loads
+            const loadingElement = document.getElementById('pdf-loading');
+            if (loadingElement) {
+              loadingElement.style.opacity = '0';
+              loadingElement.style.pointerEvents = 'none';
+            }
+          }}
+          onError={(e) => {
+            console.error("Failed to load PDF:", e);
+            const loadingElement = document.getElementById('pdf-loading');
+            if (loadingElement) {
+              loadingElement.innerHTML = `
+                <div class="text-center">
+                  <XCircle class="w-12 h-12 text-red-500 mx-auto mb-4" />
+                  <p class="text-red-600 font-medium">Failed to load PDF preview</p>
+                  <p class="text-sm text-gray-500 mt-2">Please download the CV to view it</p>
+                </div>
+              `;
+            }
+          }}
+        />
+      )}
+      
+      {/* PDF controls overlay - only show when PDF is loaded */}
+      {selectedCv && (
+        <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 bg-black/70 text-white px-4 py-2 rounded-full flex items-center space-x-4 backdrop-blur-sm z-20">
+          <button
+            onClick={() => {
+              const iframe = document.getElementById('pdf-preview') as HTMLIFrameElement;
+              if (iframe?.contentWindow) {
+                iframe.contentWindow.postMessage('prev', '*');
+              }
+            }}
+            className="hover:text-[#86BC25] transition-colors duration-200 font-medium text-sm"
+          >
+            ← Previous
+          </button>
+          <span className="text-xs text-gray-300">Use mouse wheel to zoom</span>
+          <button
+            onClick={() => {
+              const iframe = document.getElementById('pdf-preview') as HTMLIFrameElement;
+              if (iframe?.contentWindow) {
+                iframe.contentWindow.postMessage('next', '*');
+              }
+            }}
+            className="hover:text-[#86BC25] transition-colors duration-200 font-medium text-sm"
+          >
+            Next →
+          </button>
+        </div>
+      )}
+    </div>
+    
+    <div className="p-4 bg-gray-50 border-t border-gray-200/50 text-center">
+      <p className="text-xs text-gray-500 font-medium">
+        Previewing CV from Google Cloud Storage • Click Download to save a copy
+      </p>
+    </div>
+  </DialogContent>
+</Dialog>
+
+
+        {/* Shortlisted Candidates Modal */}
+<Dialog open={showShortlistedModal} onOpenChange={setShowShortlistedModal}>
+  <DialogContent className="max-w-4xl max-h-[80vh] bg-white/98 backdrop-blur-xl border-0 shadow-2xl">
+    <DialogHeader>
+      <DialogTitle className="text-2xl font-bold text-[#0F0B0B] flex items-center">
+        <Heart className="w-6 h-6 text-[#86BC25] mr-2" />
+        Shortlisted Candidates
+        <Badge variant="secondary" className="ml-3 bg-[#86BC25]/10 text-[#86BC25]">
+          {shortlistedCandidates.length}
+        </Badge>
+      </DialogTitle>
+    </DialogHeader>
+    
+    <div className="max-h-[60vh] overflow-y-auto">
+      {shortlistedCandidates.length === 0 ? (
+        <div className="text-center py-12">
+          <Heart className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+          <p className="text-gray-500 font-medium">No candidates shortlisted yet</p>
+          <p className="text-sm text-gray-400 mt-2">Swipe right on candidates to add them here</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-2">
+          {shortlistedCandidates.map((candidate) => (
+            <Card key={candidate.id} className="bg-white/90 backdrop-blur-sm border border-gray-200/50">
+              <CardContent className="p-4">
+                <div className="flex items-center space-x-3">
+                  <div
+                    className="w-12 h-12 rounded-full flex items-center justify-center text-white font-bold text-lg shadow-md"
+                    style={{
+                      background: `linear-gradient(135deg, ${candidate.gradientFrom} 0%, ${candidate.gradientTo} 100%)`,
+                    }}
+                  >
+                    {candidate.initials}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <h4 className="font-semibold text-[#0F0B0B] truncate">{candidate.name}</h4>
+                    <p className="text-sm text-gray-600 truncate">{candidate.role}</p>
+                    <div className="flex flex-wrap gap-1 mt-2">
+                      {candidate.skills.slice(0, 3).map((skill, index) => (
+                        <span key={index} className="text-xs bg-gray-100 text-gray-700 px-2 py-0.5 rounded-full">
+                          {skill}
+                        </span>
+                      ))}
+                      {candidate.skills.length > 3 && (
+                        <span className="text-xs text-gray-500">+{candidate.skills.length - 3} more</span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+                <div className="flex space-x-2 mt-4">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setSelectedCv(candidate.cvUrl)}
+                    className="flex-1 text-xs border-gray-200 hover:border-gray-300"
+                  >
+                    <FileText className="w-3 h-3 mr-1" />
+                    View CV
+                  </Button>
+                  
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
+    </div>
+    
+    <div className="flex justify-between items-center pt-4 border-t border-gray-200/50">
+      <Button
+        variant="outline"
+        onClick={() => setShortlistedCandidates([])}
+        disabled={shortlistedCandidates.length === 0}
+        className="border-red-200 text-red-600 hover:bg-red-50 hover:border-red-300"
+      >
+        <XCircle className="w-4 h-4 mr-2" />
+        Clear All
+      </Button>
+      <Button
+        onClick={() => setShowShortlistedModal(false)}
+        className="bg-[#86BC25] hover:bg-[#7AA622] text-white"
+      >
+        Close
+      </Button>
+    </div>
+  </DialogContent>
+</Dialog>
         <div className="bg-white/95 backdrop-blur-xl border-t border-gray-200/30 p-6 shadow-lg relative overflow-hidden z-10">
           <div className="absolute -top-2 -left-2 w-12 h-12 bg-gradient-to-br from-[#86BC25]/5 to-transparent rounded-full" />
           <div className="absolute -bottom-2 -right-2 w-8 h-8 bg-gradient-to-tl from-[#0F0B0B]/5 to-transparent rounded-full" />
@@ -693,13 +901,22 @@ if (responseData.type === 'text') {
               <Paperclip className="w-4 h-4 text-gray-600 group-hover:text-[#86BC25]" />
             </Button>
 
-            <Button
-              variant="outline"
-              size="sm"
-              className="p-3 border-gray-200 hover:border-[#86BC25] hover:bg-[#86BC25]/5 transition-all duration-200 shadow-sm hover:shadow-md bg-transparent group"
-            >
-              <Filter className="w-4 h-4 text-gray-600 group-hover:text-[#86BC25]" />
-            </Button>
+            
+
+<Button
+  variant="outline"
+  size="sm"
+  onClick={() => setShowShortlistedModal(true)}
+  className="p-3 border-gray-200 hover:border-[#86BC25] hover:bg-[#86BC25]/5 transition-all duration-200 shadow-sm hover:shadow-md bg-transparent group relative"
+  disabled={shortlistedCandidates.length === 0}
+>
+  <Filter className="w-4 h-4 text-gray-600 group-hover:text-[#86BC25]" />
+  {shortlistedCandidates.length > 0 && (
+    <span className="absolute -top-2 -right-2 w-5 h-5 bg-[#86BC25] text-white text-xs rounded-full flex items-center justify-center font-bold">
+      {shortlistedCandidates.length}
+    </span>
+  )}
+</Button>
 
             <div className="flex-1 relative">
               <Input
@@ -708,6 +925,7 @@ if (responseData.type === 'text') {
                 onKeyPress={(e) => e.key === "Enter" && handleSendMessage()}
                 placeholder="Ask HirePal about candidates, roles, or hiring needs..."
                 className="w-full px-4 py-3 rounded-2xl border-gray-200 focus:border-[#86BC25] focus:ring-[#86BC25] bg-white/90 backdrop-blur-sm shadow-sm hover:shadow-md transition-all duration-200 text-sm font-medium placeholder:text-gray-500"
+                disabled={isTyping}
               />
             </div>
 
@@ -718,6 +936,7 @@ if (responseData.type === 'text') {
             >
               <Send className="w-4 h-4" />
             </Button>
+            
           </div>
         </div>
       </div>

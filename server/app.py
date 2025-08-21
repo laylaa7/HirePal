@@ -74,12 +74,19 @@ def chat_with_bot_with_history(query: Query):
 
     try:
         # Call the ask function, which now returns a dict
-        response_data = ask(question, session_history) # This is now a dictionary
-        return response_data # Return the dict directly, FastAPI will convert to JSON
+        response_data = ask(question, session_history)
+        
+        # Add type field for frontend to distinguish response types
+        if response_data.get("candidates"):
+            response_data["type"] = "candidates"
+        else:
+            response_data["type"] = "text"
+            
+        return response_data
     except Exception as e:
         # Return a structured error as well
         return {"type": "error", "content": f"An error occurred: {str(e)}"}
-    
+      
 if __name__ == "__main__":
     # Get the port from an environment variable, default to 8000
     port = int(os.environ.get("PORT", 8000))
