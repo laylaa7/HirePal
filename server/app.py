@@ -8,7 +8,7 @@ from pydantic import BaseModel
 from typing import Dict
 from fastapi.middleware.cors import CORSMiddleware
 # Assuming your chat_rag.py is in the same directory
-from chat_rag import ask, InMemoryChatMessageHistory # Import the ask function and history classes
+from chat_rag_final import ask, InMemoryChatMessageHistory # Import the ask function and history classes
 
 # A dictionary to store chat histories keyed by a unique session ID
 chat_histories: Dict[str, InMemoryChatMessageHistory] = {}
