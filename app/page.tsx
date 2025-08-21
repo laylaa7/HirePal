@@ -1,12 +1,17 @@
-"use client"
+"use client";
 
-import { useState, useRef, useEffect } from "react"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent } from "@/components/ui/card"
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Badge } from "@/components/ui/badge"
-import { Input } from "@/components/ui/input"
-import axios from 'axios';
+import { useState, useRef, useEffect } from "react";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import axios from "axios";
 import {
   FileText,
   MapPin,
@@ -24,39 +29,42 @@ import {
   Plus,
   MessageSquare,
   Clock,
-} from "lucide-react"
+} from "lucide-react";
 
 interface Candidate {
-  id: string
-  name: string
-  role: string
-  avatar: string
-  skills: string[]
-  location: string
-  experience: string
-  cvUrl: string
-  initials: string
-  gradientFrom: string
-  gradientTo: string
+  name: string;
+  relevant_content: string;
+  cv_link: string;
+  // Adding optional fields for backward compatibility and UI enhancement
+  id?: string;
+  role?: string;
+  avatar?: string;
+  skills?: string[];
+  location?: string;
+  experience?: string;
+  cvUrl?: string;
+  initials?: string;
+  gradientFrom?: string;
+  gradientTo?: string;
 }
 
 interface Message {
-  id: string
-  type: "bot" | "user"
-  content: string
-  candidates?: Candidate[]
-  timestamp: Date
+  id: string;
+  type: "bot" | "user";
+  content: string;
+  candidates?: Candidate[];
+  timestamp: Date;
 }
 
 interface ChatHistory {
-  id: string
-  title: string
-  lastMessage: string
-  timestamp: Date
-  messageCount: number
+  id: string;
+  title: string;
+  lastMessage: string;
+  timestamp: Date;
+  messageCount: number;
 }
 
-const API_BASE_URL = 'http://localhost:8000'; // Your FastAPI server's address
+const API_BASE_URL = "http://localhost:8000"; // Your FastAPI server's address
 
 const mockCandidates: Candidate[] = [
   {
@@ -68,9 +76,12 @@ const mockCandidates: Candidate[] = [
     location: "San Francisco, CA",
     experience: "5+ years",
     cvUrl: "/mock-cv.pdf",
+    cv_link: "/mock-cv.pdf",
     initials: "SC",
     gradientFrom: "#667eea",
     gradientTo: "#764ba2",
+    relevant_content:
+      "Senior software engineer with 5+ years of experience in React, TypeScript, Node.js, and AWS. Proven track record of building scalable web applications.",
   },
   {
     id: "2",
@@ -81,9 +92,12 @@ const mockCandidates: Candidate[] = [
     location: "New York, NY",
     experience: "4+ years",
     cvUrl: "/mock-cv.pdf",
+    cv_link: "/mock-cv.pdf",
     initials: "MJ",
     gradientFrom: "#f093fb",
     gradientTo: "#f5576c",
+    relevant_content:
+      "Full stack developer with 4+ years of experience in Python, Django, PostgreSQL, and Docker. Experienced in building robust backend systems.",
   },
   {
     id: "3",
@@ -94,11 +108,14 @@ const mockCandidates: Candidate[] = [
     location: "Austin, TX",
     experience: "3+ years",
     cvUrl: "/mock-cv.pdf",
+    cv_link: "/mock-cv.pdf",
     initials: "ER",
     gradientFrom: "#4facfe",
     gradientTo: "#00f2fe",
+    relevant_content:
+      "Frontend developer with 3+ years of experience in Vue.js, JavaScript, CSS, and Figma. Specialized in creating beautiful and responsive user interfaces.",
   },
-]
+];
 
 const mockChatHistory: ChatHistory[] = [
   {
@@ -122,173 +139,215 @@ const mockChatHistory: ChatHistory[] = [
     timestamp: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000), // 3 days ago
     messageCount: 15,
   },
-]
+];
 
 export default function HirePalChat() {
   const [messages, setMessages] = useState<Message[]>([
     {
       id: "1",
       type: "bot",
-      content: "Hello 👋 this is HirePal. I'm your Deloitte recruiting assistant. What role are you hiring for today?",
+      content:
+        "Hello 👋 this is HirePal. I'm your Deloitte recruiting assistant. What role are you hiring for today?",
       timestamp: new Date(),
     },
-  ])
-  const [inputValue, setInputValue] = useState("")
-  const [selectedCv, setSelectedCv] = useState<string | null>(null)
-  const [currentCandidateIndex, setCurrentCandidateIndex] = useState<{ [messageId: string]: number }>({})
-  const [swipeDirection, setSwipeDirection] = useState<{ [candidateId: string]: "left" | "right" | null }>({})
+  ]);
+  const [inputValue, setInputValue] = useState("");
+  const [selectedCv, setSelectedCv] = useState<string | null>(null);
+  const [currentCandidateIndex, setCurrentCandidateIndex] = useState<{
+    [messageId: string]: number;
+  }>({});
+  const [swipeDirection, setSwipeDirection] = useState<{
+    [candidateId: string]: "left" | "right" | null;
+  }>({});
   const [recentlyRejected, setRecentlyRejected] = useState<{
-    candidateId: string
-    messageId: string
-    timestamp: number
-  } | null>(null)
+    candidateId: string;
+    messageId: string;
+    timestamp: number;
+  } | null>(null);
   const [candidateActions, setCandidateActions] = useState<{
-    [candidateId: string]: "shortlisted" | "rejected" | null
-  }>({})
-  const [sidebarOpen, setSidebarOpen] = useState(false)
-  const [chatHistory, setChatHistory] = useState<ChatHistory[]>(mockChatHistory)
-  const [currentChatId, setCurrentChatId] = useState<string | null>(null)
-  const messagesEndRef = useRef<HTMLDivElement>(null)
+    [candidateId: string]: "shortlisted" | "rejected" | null;
+  }>({});
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [chatHistory, setChatHistory] =
+    useState<ChatHistory[]>(mockChatHistory);
+  const [currentChatId, setCurrentChatId] = useState<string | null>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
-  }
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
 
   useEffect(() => {
-    scrollToBottom()
-  }, [messages])
-
+    scrollToBottom();
+  }, [messages]);
 
   const getOrCreateSession = async (): Promise<string> => {
-  if (currentChatId) {
-    return currentChatId;
-  }
-
-  const maxRetries = 3;
-  const retryDelay = 1000; // 1 second
-
-  for (let attempt = 1; attempt <= maxRetries; attempt++) {
-    try {
-      console.log(`Attempting to create session (Attempt ${attempt})...`);
-      const response = await axios.get(`${API_BASE_URL}/new_session`);
-      const newSessionId = response.data.session_id;
-      setCurrentChatId(newSessionId);
-      console.log("Session created successfully:", newSessionId);
-      return newSessionId;
-    } catch (error: any) {
-      console.error(`Attempt ${attempt} failed:`, error.message);
-
-      if (attempt === maxRetries) {
-        // Final attempt failed
-        console.error("All attempts to create a session failed. Using fallback ID.");
-        const fallbackId = `fallback-${Date.now()}`;
-        setCurrentChatId(fallbackId);
-        return fallbackId;
-      }
-
-      // Wait before retrying
-      await new Promise(resolve => setTimeout(resolve, retryDelay * attempt));
+    if (currentChatId) {
+      return currentChatId;
     }
-  }
-  // This line should theoretically never be reached, but TypeScript wants a return
-  const fallbackId = `fallback-${Date.now()}`;
-  setCurrentChatId(fallbackId);
-  return fallbackId;
-};
+
+    const maxRetries = 3;
+    const retryDelay = 1000; // 1 second
+
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        console.log(`Attempting to create session (Attempt ${attempt})...`);
+        const response = await axios.get(`${API_BASE_URL}/new_session`);
+        const newSessionId = response.data.session_id;
+        setCurrentChatId(newSessionId);
+        console.log("Session created successfully:", newSessionId);
+        return newSessionId;
+      } catch (error: any) {
+        console.error(`Attempt ${attempt} failed:`, error.message);
+
+        if (attempt === maxRetries) {
+          // Final attempt failed
+          console.error(
+            "All attempts to create a session failed. Using fallback ID."
+          );
+          const fallbackId = `fallback-${Date.now()}`;
+          setCurrentChatId(fallbackId);
+          return fallbackId;
+        }
+
+        // Wait before retrying
+        await new Promise((resolve) =>
+          setTimeout(resolve, retryDelay * attempt)
+        );
+      }
+    }
+    // This line should theoretically never be reached, but TypeScript wants a return
+    const fallbackId = `fallback-${Date.now()}`;
+    setCurrentChatId(fallbackId);
+    return fallbackId;
+  };
 
   const handleSendMessage = async () => {
-  if (!inputValue.trim()) return;
+    if (!inputValue.trim()) return;
 
-  const userMessage: Message = {
-    id: Date.now().toString(),
-    type: "user",
-    content: inputValue,
-    timestamp: new Date(),
-  };
-
-  setMessages((prev) => [...prev, userMessage]);
-  setInputValue(""); // Clear input immediately
-
-  try {
-   // 1. Get a session ID for this conversation
-const currentSessionId = await getOrCreateSession(); // Rename to avoid confusion
-
-// 2. Send the user's question to your backend API
-const response = await axios.post(`${API_BASE_URL}/ask`, {
-  session_id: currentSessionId,  // <-- Use the variable we just got
-  question: inputValue,
-});
-
-// 3. Handle the STRUCTURED response from the backend
-const responseData = response.data;
-
-if (responseData.type === 'text') {
-  // If it's a simple text response, show it in a bubble
-  const botMessage: Message = {
-    id: (Date.now() + 1).toString(),
-    type: 'bot',
-    content: responseData.content,
-    timestamp: new Date(),
-  };
-  setMessages((prev) => [...prev, botMessage]);
-} else if (responseData.type === 'candidates') {
-  // If it's a list of candidates, create a special bot message with the data
-  const botMessage: Message = {
-    id: (Date.now() + 1).toString(),
-    type: 'bot',
-    content: `I found ${responseData.content.length} potential candidates for you.`, // SHORT, CLEAN MESSAGE
-    candidates: responseData.content, // This is the array of candidate objects
-    timestamp: new Date(),
-  };
-  setMessages((prev) => [...prev, botMessage]);
-  // Initialize the current index for swiping through these new candidates
-  setCurrentCandidateIndex((prev) => ({ ...prev, [botMessage.id]: 0 }));
-} else if (responseData.type === 'error') {
-  // Handle errors from the backend
-  const errorMessage: Message = {
-    id: (Date.now() + 1).toString(),
-    type: 'bot',
-    content: responseData.content,
-    timestamp: new Date(),
-  };
-  setMessages((prev) => [...prev, errorMessage]);
-}
-
-  } catch (error) {
-    console.error("Error sending message to API:", error);
-
-    // 5. (Optional) Show an error message to the user if the API call fails
-    const errorMessage: Message = {
-      id: (Date.now() + 1).toString(),
-      type: "bot",
-      content: "Sorry, I'm having trouble connecting to the server. Please try again shortly.",
+    const userMessage: Message = {
+      id: Date.now().toString(),
+      type: "user",
+      content: inputValue,
       timestamp: new Date(),
     };
-    setMessages((prev) => [...prev, errorMessage]);
-  }
-};
 
-  const handleSwipe = (candidateId: string, direction: "left" | "right", messageId: string) => {
-    setSwipeDirection((prev) => ({ ...prev, [candidateId]: direction }))
+    setMessages((prev) => [...prev, userMessage]);
+    setInputValue(""); // Clear input immediately
 
-    const action = direction === "right" ? "shortlisted" : "rejected"
-    setCandidateActions((prev) => ({ ...prev, [candidateId]: action }))
+    try {
+      // 1. Get a session ID for this conversation
+      const currentSessionId = await getOrCreateSession(); // Rename to avoid confusion
+
+      // 2. Send the user's question to your backend API
+      const response = await axios.post(`${API_BASE_URL}/ask`, {
+        session_id: currentSessionId, // <-- Use the variable we just got
+        question: inputValue,
+      });
+
+      // 3. Handle the response from the backend
+      const responseData = response.data;
+
+      // Check if the response has the new format with 'reply' and 'candidates'
+      if (responseData.reply && responseData.candidates !== undefined) {
+        // New format: { reply: string, candidates: Candidate[] }
+        const botMessage: Message = {
+          id: (Date.now() + 1).toString(),
+          type: "bot",
+          content: responseData.reply,
+          candidates: responseData.candidates,
+          timestamp: new Date(),
+        };
+        setMessages((prev) => [...prev, botMessage]);
+
+        // Initialize the current index for swiping through these new candidates
+        if (responseData.candidates.length > 0) {
+          setCurrentCandidateIndex((prev) => ({ ...prev, [botMessage.id]: 0 }));
+        }
+      } else if (responseData.type === "text") {
+        // Legacy format: { type: "text", content: string }
+        const botMessage: Message = {
+          id: (Date.now() + 1).toString(),
+          type: "bot",
+          content: responseData.content,
+          timestamp: new Date(),
+        };
+        setMessages((prev) => [...prev, botMessage]);
+      } else if (responseData.type === "candidates") {
+        // Legacy format: { type: "candidates", content: Candidate[] }
+        const botMessage: Message = {
+          id: (Date.now() + 1).toString(),
+          type: "bot",
+          content: `I found ${responseData.content.length} potential candidates for you.`,
+          candidates: responseData.content,
+          timestamp: new Date(),
+        };
+        setMessages((prev) => [...prev, botMessage]);
+        setCurrentCandidateIndex((prev) => ({ ...prev, [botMessage.id]: 0 }));
+      } else if (responseData.type === "error") {
+        // Legacy format: { type: "error", content: string }
+        const errorMessage: Message = {
+          id: (Date.now() + 1).toString(),
+          type: "bot",
+          content: responseData.content,
+          timestamp: new Date(),
+        };
+        setMessages((prev) => [...prev, errorMessage]);
+      } else {
+        // Fallback for unknown response format
+        const botMessage: Message = {
+          id: (Date.now() + 1).toString(),
+          type: "bot",
+          content:
+            "I received a response but I'm not sure how to handle it. Please try again.",
+          timestamp: new Date(),
+        };
+        setMessages((prev) => [...prev, botMessage]);
+      }
+    } catch (error) {
+      console.error("Error sending message to API:", error);
+
+      // 5. (Optional) Show an error message to the user if the API call fails
+      const errorMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        type: "bot",
+        content:
+          "Sorry, I'm having trouble connecting to the server. Please try again shortly.",
+        timestamp: new Date(),
+      };
+      setMessages((prev) => [...prev, errorMessage]);
+    }
+  };
+
+  const handleSwipe = (
+    candidateId: string,
+    direction: "left" | "right",
+    messageId: string
+  ) => {
+    setSwipeDirection((prev) => ({ ...prev, [candidateId]: direction }));
+
+    const action = direction === "right" ? "shortlisted" : "rejected";
+    setCandidateActions((prev) => ({ ...prev, [candidateId]: action }));
 
     if (direction === "left") {
-      setRecentlyRejected({ candidateId, messageId, timestamp: Date.now() })
+      setRecentlyRejected({ candidateId, messageId, timestamp: Date.now() });
       setTimeout(() => {
-        setRecentlyRejected((prev) => (prev?.candidateId === candidateId ? null : prev))
-      }, 5000)
+        setRecentlyRejected((prev) =>
+          prev?.candidateId === candidateId ? null : prev
+        );
+      }, 5000);
     }
 
-    const candidate = mockCandidates.find((c) => c.id === candidateId)
-
     setTimeout(() => {
-      const currentIndex = currentCandidateIndex[messageId] || 0
-      const candidates = messages.find((m) => m.id === messageId)?.candidates || []
+      const currentIndex = currentCandidateIndex[messageId] || 0;
+      const candidates =
+        messages.find((m) => m.id === messageId)?.candidates || [];
 
       if (currentIndex < candidates.length - 1) {
-        setCurrentCandidateIndex((prev) => ({ ...prev, [messageId]: currentIndex + 1 }))
+        setCurrentCandidateIndex((prev) => ({
+          ...prev,
+          [messageId]: currentIndex + 1,
+        }));
       } else {
         const completionMessage: Message = {
           id: (Date.now() + Math.random()).toString(),
@@ -296,35 +355,39 @@ if (responseData.type === 'text') {
           content:
             "Great! You've reviewed all candidates. Would you like me to find more matches or help with the next steps?",
           timestamp: new Date(),
-        }
-        setMessages((prev) => [...prev, completionMessage])
+        };
+        setMessages((prev) => [...prev, completionMessage]);
       }
 
-      setSwipeDirection((prev) => ({ ...prev, [candidateId]: null }))
-    }, 400)
-  }
+      setSwipeDirection((prev) => ({ ...prev, [candidateId]: null }));
+    }, 400);
+  };
 
   const handleUndo = () => {
-    if (!recentlyRejected) return
+    if (!recentlyRejected) return;
 
-    const { candidateId, messageId } = recentlyRejected
+    const { candidateId, messageId } = recentlyRejected;
 
-    setCandidateActions((prev) => ({ ...prev, [candidateId]: null }))
+    setCandidateActions((prev) => ({ ...prev, [candidateId]: null }));
 
-    const currentIndex = currentCandidateIndex[messageId] || 0
-    setCurrentCandidateIndex((prev) => ({ ...prev, [messageId]: Math.max(0, currentIndex - 1) }))
+    const currentIndex = currentCandidateIndex[messageId] || 0;
+    setCurrentCandidateIndex((prev) => ({
+      ...prev,
+      [messageId]: Math.max(0, currentIndex - 1),
+    }));
 
-    setRecentlyRejected(null)
-  }
+    setRecentlyRejected(null);
+  };
 
   const handleDownloadCV = (candidate: Candidate) => {
-    const link = document.createElement("a")
-    link.href = candidate.cvUrl
-    link.download = `${candidate.name.replace(" ", "_")}_CV.pdf`
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
-  }
+    const link = document.createElement("a");
+    const cvUrl = candidate.cvUrl || candidate.cv_link;
+    link.href = cvUrl;
+    link.download = `${candidate.name.replace(" ", "_")}_CV.pdf`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
 
   const handleNewChat = () => {
     // Save current chat to history if it has messages
@@ -335,8 +398,8 @@ if (responseData.type === 'text') {
         lastMessage: messages[messages.length - 1]?.content || "",
         timestamp: new Date(),
         messageCount: messages.length,
-      }
-      setChatHistory((prev) => [newHistoryItem, ...prev])
+      };
+      setChatHistory((prev) => [newHistoryItem, ...prev]);
     }
 
     // Reset to initial state
@@ -348,39 +411,47 @@ if (responseData.type === 'text') {
           "Hello 👋 this is HirePal. I'm your Deloitte recruiting assistant. What role are you hiring for today?",
         timestamp: new Date(),
       },
-    ])
-    setCurrentChatId(null)
-    setCandidateActions({})
-    setCurrentCandidateIndex({})
-    setSidebarOpen(false)
-  }
+    ]);
+    setCurrentChatId(null);
+    setCandidateActions({});
+    setCurrentCandidateIndex({});
+    setSidebarOpen(false);
+  };
 
   const handleLoadChat = (chatId: string) => {
-    setCurrentChatId(chatId)
+    setCurrentChatId(chatId);
     // In a real app, you would load the actual chat messages here
-    setSidebarOpen(false)
-  }
+    setSidebarOpen(false);
+  };
 
   const formatTimeAgo = (date: Date) => {
-    const now = new Date()
-    const diffInHours = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60))
+    const now = new Date();
+    const diffInHours = Math.floor(
+      (now.getTime() - date.getTime()) / (1000 * 60 * 60)
+    );
 
-    if (diffInHours < 1) return "Just now"
-    if (diffInHours < 24) return `${diffInHours}h ago`
-    const diffInDays = Math.floor(diffInHours / 24)
-    if (diffInDays < 7) return `${diffInDays}d ago`
-    return date.toLocaleDateString()
-  }
+    if (diffInHours < 1) return "Just now";
+    if (diffInHours < 24) return `${diffInHours}h ago`;
+    const diffInDays = Math.floor(diffInHours / 24);
+    if (diffInDays < 7) return `${diffInDays}d ago`;
+    return date.toLocaleDateString();
+  };
 
-  const CandidateCard = ({ candidate, messageId }: { candidate: Candidate; messageId: string }) => {
+  const CandidateCard = ({
+    candidate,
+    messageId,
+  }: {
+    candidate: Candidate;
+    messageId: string;
+  }) => {
     const swipeClass =
-      swipeDirection[candidate.id] === "left"
+      swipeDirection[candidate.id || candidate.name] === "left"
         ? "swipe-left"
-        : swipeDirection[candidate.id] === "right"
-          ? "swipe-right"
-          : ""
+        : swipeDirection[candidate.id || candidate.name] === "right"
+        ? "swipe-right"
+        : "";
 
-    const candidateAction = candidateActions[candidate.id]
+    const candidateAction = candidateActions[candidate.id || candidate.name];
 
     return (
       <Card
@@ -411,43 +482,77 @@ if (responseData.type === 'text') {
             <div
               className="w-24 h-24 rounded-full flex items-center justify-center text-white font-bold text-2xl shadow-xl ring-4 ring-white/30 hover:ring-white/50 transition-all duration-300"
               style={{
-                background: `linear-gradient(135deg, ${candidate.gradientFrom} 0%, ${candidate.gradientTo} 100%)`,
+                background: `linear-gradient(135deg, ${
+                  candidate.gradientFrom || "#86BC25"
+                } 0%, ${candidate.gradientTo || "#7AA622"} 100%)`,
               }}
             >
-              {candidate.initials}
+              {candidate.initials || candidate.name.charAt(0)}
             </div>
 
             <div className="text-center space-y-3">
-              <h3 className="font-bold text-xl text-[#0F0B0B] tracking-tight">{candidate.name}</h3>
-              <p className="text-gray-600 font-semibold text-base">{candidate.role}</p>
+              <h3 className="font-bold text-xl text-[#0F0B0B] tracking-tight">
+                {candidate.name}
+              </h3>
+              <p className="text-gray-600 font-semibold text-base">
+                {candidate.role || "Role not specified"}
+              </p>
+
+              {/* Display relevant content if available */}
+              {candidate.relevant_content && (
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-left">
+                  <p className="text-sm text-blue-800 font-medium mb-1">
+                    Relevant Experience:
+                  </p>
+                  <p className="text-xs text-blue-700 leading-relaxed">
+                    {candidate.relevant_content}
+                  </p>
+                </div>
+              )}
+
               <div className="flex flex-col space-y-2 text-sm">
                 <div className="flex items-center justify-center text-gray-500 space-x-2">
                   <MapPin className="w-4 h-4 text-gray-400" />
-                  <span className="font-medium">{candidate.location}</span>
+                  <span className="font-medium">
+                    {candidate.location || "Location not specified"}
+                  </span>
                 </div>
                 <div className="flex items-center justify-center text-gray-500 space-x-2">
                   <Briefcase className="w-4 h-4 text-gray-400" />
-                  <span className="font-medium">{candidate.experience}</span>
+                  <span className="font-medium">
+                    {candidate.experience || "Experience not specified"}
+                  </span>
                 </div>
               </div>
             </div>
 
             <div className="flex flex-wrap gap-2 justify-center max-w-full">
-              {candidate.skills.map((skill, index) => (
+              {candidate.skills && candidate.skills.length > 0 ? (
+                candidate.skills.map((skill, index) => (
+                  <Badge
+                    key={index}
+                    variant="secondary"
+                    className="text-xs px-3 py-1.5 bg-gradient-to-r from-gray-100 to-gray-50 text-gray-700 border border-gray-200/50 font-semibold hover:from-gray-200 hover:to-gray-100 transition-all duration-200 shadow-sm"
+                  >
+                    {skill}
+                  </Badge>
+                ))
+              ) : (
                 <Badge
-                  key={index}
                   variant="secondary"
-                  className="text-xs px-3 py-1.5 bg-gradient-to-r from-gray-100 to-gray-50 text-gray-700 border border-gray-200/50 font-semibold hover:from-gray-200 hover:to-gray-100 transition-all duration-200 shadow-sm"
+                  className="text-xs px-3 py-1.5 bg-gray-100 text-gray-700 border border-gray-200/50 font-semibold"
                 >
-                  {skill}
+                  Skills not specified
                 </Badge>
-              ))}
+              )}
             </div>
 
             <Button
               variant="outline"
               size="sm"
-              onClick={() => setSelectedCv(candidate.cvUrl)}
+              onClick={() =>
+                setSelectedCv(candidate.cvUrl || candidate.cv_link)
+              }
               className="w-full flex items-center justify-center space-x-2 border-gray-200 hover:border-gray-300 hover:bg-gray-50 transition-all duration-200 py-3 font-semibold shadow-sm hover:shadow-md"
             >
               <FileText className="w-4 h-4" />
@@ -458,7 +563,9 @@ if (responseData.type === 'text') {
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => handleSwipe(candidate.id, "left", messageId)}
+                onClick={() =>
+                  handleSwipe(candidate.id || candidate.name, "left", messageId)
+                }
                 className="flex-1 border-red-200 text-red-600 hover:bg-red-50 hover:border-red-300 transition-all duration-200 py-3 font-semibold shadow-sm hover:shadow-md bg-transparent group"
                 disabled={!!candidateAction}
               >
@@ -467,7 +574,13 @@ if (responseData.type === 'text') {
               </Button>
               <Button
                 size="sm"
-                onClick={() => handleSwipe(candidate.id, "right", messageId)}
+                onClick={() =>
+                  handleSwipe(
+                    candidate.id || candidate.name,
+                    "right",
+                    messageId
+                  )
+                }
                 className="flex-1 bg-gradient-to-r from-[#86BC25] to-[#7AA622] hover:from-[#7AA622] hover:to-[#6B9419] text-white shadow-lg hover:shadow-xl transition-all duration-200 py-3 font-semibold border-0 group"
                 disabled={!!candidateAction}
               >
@@ -478,13 +591,16 @@ if (responseData.type === 'text') {
           </div>
         </CardContent>
       </Card>
-    )
-  }
+    );
+  };
 
   return (
     <div className="flex h-screen bg-gradient-to-br from-gray-50 via-white to-gray-100 relative overflow-hidden">
       {sidebarOpen && (
-        <div className="fixed inset-0 bg-black/20 backdrop-blur-sm z-40" onClick={() => setSidebarOpen(false)} />
+        <div
+          className="fixed inset-0 bg-black/20 backdrop-blur-sm z-40"
+          onClick={() => setSidebarOpen(false)}
+        />
       )}
 
       {/* Sidebar */}
@@ -498,7 +614,11 @@ if (responseData.type === 'text') {
           <div className="p-6 border-b border-gray-200/30">
             <div className="flex items-center justify-between mb-4">
               <h2 className="font-bold text-lg text-[#0F0B0B]">Chat History</h2>
-              <Button onClick={() => setSidebarOpen(false)} variant="ghost" size="sm">
+              <Button
+                onClick={() => setSidebarOpen(false)}
+                variant="ghost"
+                size="sm"
+              >
                 ✕
               </Button>
             </div>
@@ -517,7 +637,9 @@ if (responseData.type === 'text') {
               <Card
                 key={chat.id}
                 className={`cursor-pointer transition-all duration-200 hover:shadow-md border border-gray-200/50 ${
-                  currentChatId === chat.id ? "bg-[#86BC25]/5 border-[#86BC25]/30" : "bg-white/80 hover:bg-gray-50/80"
+                  currentChatId === chat.id
+                    ? "bg-[#86BC25]/5 border-[#86BC25]/30"
+                    : "bg-white/80 hover:bg-gray-50/80"
                 }`}
                 onClick={() => handleLoadChat(chat.id)}
               >
@@ -527,14 +649,20 @@ if (responseData.type === 'text') {
                       <MessageSquare className="w-5 h-5 text-[#86BC25]" />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <h3 className="font-semibold text-sm text-[#0F0B0B] truncate mb-1">{chat.title}</h3>
-                      <p className="text-xs text-gray-600 line-clamp-2 mb-2">{chat.lastMessage}</p>
+                      <h3 className="font-semibold text-sm text-[#0F0B0B] truncate mb-1">
+                        {chat.title}
+                      </h3>
+                      <p className="text-xs text-gray-600 line-clamp-2 mb-2">
+                        {chat.lastMessage}
+                      </p>
                       <div className="flex items-center justify-between text-xs text-gray-500">
                         <div className="flex items-center space-x-1">
                           <Clock className="w-3 h-3" />
                           <span>{formatTimeAgo(chat.timestamp)}</span>
                         </div>
-                        <span className="bg-gray-100 px-2 py-0.5 rounded-full font-medium">{chat.messageCount}</span>
+                        <span className="bg-gray-100 px-2 py-0.5 rounded-full font-medium">
+                          {chat.messageCount}
+                        </span>
                       </div>
                     </div>
                   </div>
@@ -591,13 +719,19 @@ if (responseData.type === 'text') {
                 <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-[#0F0B0B] rounded-full border-2 border-white" />
               </div>
               <div>
-                <h1 className="font-bold text-[#0F0B0B] text-lg tracking-tight">HirePal</h1>
-                <p className="text-sm text-gray-500 font-medium">Deloitte Recruiting Assistant</p>
+                <h1 className="font-bold text-[#0F0B0B] text-lg tracking-tight">
+                  HirePal
+                </h1>
+                <p className="text-sm text-gray-500 font-medium">
+                  Deloitte Recruiting Assistant
+                </p>
               </div>
             </div>
             <div className="text-right">
               <div className="font-bold text-lg text-[#0F0B0B]">Deloitte</div>
-              <div className="text-xs text-gray-500 font-medium tracking-wider">DIGITAL</div>
+              <div className="text-xs text-gray-500 font-medium tracking-wider">
+                DIGITAL
+              </div>
             </div>
           </div>
         </div>
@@ -606,7 +740,9 @@ if (responseData.type === 'text') {
           <div className="bg-gradient-to-r from-orange-50 to-yellow-50 border-b border-orange-200/50 px-6 py-3 flex items-center justify-between animate-in slide-in-from-top duration-300 z-10">
             <div className="flex items-center space-x-3">
               <XCircle className="w-4 h-4 text-orange-600" />
-              <span className="text-sm font-medium text-orange-800">Candidate rejected. Changed your mind?</span>
+              <span className="text-sm font-medium text-orange-800">
+                Candidate rejected. Changed your mind?
+              </span>
             </div>
             <Button
               onClick={handleUndo}
@@ -622,7 +758,12 @@ if (responseData.type === 'text') {
 
         <div className="flex-1 overflow-y-auto p-6 space-y-6 relative z-10">
           {messages.map((message) => (
-            <div key={message.id} className={`flex ${message.type === "user" ? "justify-end" : "justify-start"}`}>
+            <div
+              key={message.id}
+              className={`flex ${
+                message.type === "user" ? "justify-end" : "justify-start"
+              }`}
+            >
               <div
                 className={`max-w-xs lg:max-w-md px-5 py-3 rounded-3xl transition-all duration-200 ${
                   message.type === "user"
@@ -630,21 +771,28 @@ if (responseData.type === 'text') {
                     : "bg-white/90 backdrop-blur-xl text-gray-900 shadow-lg border border-gray-100/50"
                 }`}
               >
-                <p className="text-sm font-medium leading-relaxed">{message.content}</p>
+                <p className="text-sm font-medium leading-relaxed">
+                  {message.content}
+                </p>
 
                 {message.candidates && message.candidates.length > 0 && (
                   <div className="mt-6">
                     {(() => {
-                      const currentIndex = currentCandidateIndex[message.id] || 0
-                      const candidate = message.candidates[currentIndex]
+                      const currentIndex =
+                        currentCandidateIndex[message.id] || 0;
+                      const candidate = message.candidates[currentIndex];
                       return candidate ? (
                         <div className="space-y-3">
-                          <CandidateCard candidate={candidate} messageId={message.id} />
+                          <CandidateCard
+                            candidate={candidate}
+                            messageId={message.id}
+                          />
                           <div className="text-center text-xs text-gray-500 font-medium">
-                            {currentIndex + 1} of {message.candidates.length} candidates
+                            {currentIndex + 1} of {message.candidates.length}{" "}
+                            candidates
                           </div>
                         </div>
-                      ) : null
+                      ) : null;
                     })()}
                   </div>
                 )}
@@ -657,11 +805,22 @@ if (responseData.type === 'text') {
         <Dialog open={!!selectedCv} onOpenChange={() => setSelectedCv(null)}>
           <DialogContent className="max-w-4xl max-h-[90vh] bg-white/98 backdrop-blur-xl border-0 shadow-2xl">
             <DialogHeader className="flex flex-row items-center justify-between">
-              <DialogTitle className="text-xl font-bold text-gray-900">Candidate CV</DialogTitle>
+              <DialogTitle className="text-xl font-bold text-gray-900">
+                Candidate CV
+              </DialogTitle>
               <Button
                 onClick={() => {
-                  const candidate = mockCandidates.find((c) => c.cvUrl === selectedCv)
-                  if (candidate) handleDownloadCV(candidate)
+                  // Find the candidate by CV URL from any message
+                  let candidate: Candidate | undefined;
+                  for (const message of messages) {
+                    if (message.candidates) {
+                      candidate = message.candidates.find(
+                        (c) => (c.cvUrl || c.cv_link) === selectedCv
+                      );
+                      if (candidate) break;
+                    }
+                  }
+                  if (candidate) handleDownloadCV(candidate);
                 }}
                 className="bg-gradient-to-r from-[#86BC25] to-[#7AA622] hover:from-[#7AA622] hover:to-[#6B9419] text-white shadow-lg hover:shadow-xl transition-all duration-200 font-semibold"
               >
@@ -671,10 +830,16 @@ if (responseData.type === 'text') {
             </DialogHeader>
             <div className="flex-1 bg-gradient-to-br from-gray-50 to-gray-100 rounded-2xl p-12 text-center border border-gray-200/50 max-w-md mx-auto">
               <FileText className="w-24 h-24 mx-auto text-gray-400 mb-6" />
-              <p className="text-gray-700 text-xl font-semibold mb-2">CV Preview</p>
-              <p className="text-sm text-gray-500 font-medium">PDF viewer would be integrated here in production</p>
+              <p className="text-gray-700 text-xl font-semibold mb-2">
+                CV Preview
+              </p>
+              <p className="text-sm text-gray-500 font-medium">
+                PDF viewer would be integrated here in production
+              </p>
               <div className="mt-8 p-6 bg-white/80 rounded-xl border border-gray-200/50 max-w-md mx-auto">
-                <p className="text-xs text-gray-600 font-medium">Click "Download CV" above to save the full document</p>
+                <p className="text-xs text-gray-600 font-medium">
+                  Click "Download CV" above to save the full document
+                </p>
               </div>
             </div>
           </DialogContent>
@@ -722,5 +887,5 @@ if (responseData.type === 'text') {
         </div>
       </div>
     </div>
-  )
+  );
 }
