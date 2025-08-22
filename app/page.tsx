@@ -632,9 +632,37 @@ const handleDownloadCV = (candidate: Candidate) => {
               >
                 <Menu className="w-5 h-5 text-gray-600" />
               </Button>
-              <div className="w-12 h-12 bg-gradient-to-br from-[#86BC25] to-[#7AA622] rounded-2xl flex items-center justify-center shadow-lg relative">
-                <span className="text-white font-bold text-xl">H</span>
-                <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-[#0F0B0B] rounded-full border-2 border-white" />
+              <div className="relative">
+                <svg width="48" height="48" viewBox="0 0 48 48" className="drop-shadow-lg">
+                  {/* Green leaf elements */}
+                  <path d="M8 12c0-2 2-4 6-4s6 2 6 4-2 4-6 4-6-2-6-4z" fill="#86BC25" className="animate-pulse" />
+                  <path
+                    d="M34 8c0-1.5 1.5-3 4.5-3s4.5 1.5 4.5 3-1.5 3-4.5 3-4.5-1.5-4.5-3z"
+                    fill="#7AA622"
+                    className="animate-pulse"
+                    style={{ animationDelay: "0.5s" }}
+                  />
+
+                  {/* Robot head - black rounded rectangle */}
+                  <rect x="12" y="18" width="24" height="18" rx="6" ry="6" fill="#0F0B0B" className="drop-shadow-md" />
+
+                  {/* Left eye - white circle */}
+                  <circle cx="20" cy="26" r="3" fill="white" />
+
+                  {/* Right eye - white circle */}
+                  <circle cx="28" cy="26" r="3" fill="white" />
+
+                  {/* Mouth - white oval */}
+                  <ellipse cx="24" cy="30" rx="2" ry="1.5" fill="white" />
+
+                  {/* Additional green accent elements */}
+                  <circle cx="6" cy="36" r="2" fill="#86BC25" opacity="0.6" />
+                  <circle cx="42" cy="32" r="1.5" fill="#7AA622" opacity="0.7" />
+
+                  {/* Small decorative dots */}
+                  <circle cx="10" cy="40" r="1" fill="#86BC25" opacity="0.4" />
+                  <circle cx="38" cy="12" r="1" fill="#7AA622" opacity="0.5" />
+                </svg>
               </div>
               <div>
                 <h1 className="font-bold text-[#0F0B0B] text-lg tracking-tight">HirePal</h1>
