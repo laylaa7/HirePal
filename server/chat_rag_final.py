@@ -69,8 +69,8 @@ INSTRUCTIONS:
 - For each unique matching candidate, extract their Name, a summary of their combined background/skills, and the link to their CV.
 - Ensure the 'reply' field contains a helpful, conversational message.
 - If a system error occurs, provide a relevant error message in the 'reply' field and an empty candidates list.
-- When i ask something regarding the previous result, you should use the HISTORY of the conversation to answer my question.
-- When asked about years of experience, you should estimate based on the information given in the CVs about experience in the company's domain, if no work experience found it is fine.
+- When I ask something regarding the previous result, you should use the HISTORY of the conversation to answer my question.
+- When asked about years of experience, you should estimate based on the information given in the CVs about work experience in the tech domain, if no work experience found it is say so.
 
 HISTORY is the previous conversation between the user and you:
 {history}
