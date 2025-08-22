@@ -921,13 +921,13 @@ const handleDownloadCV = (candidate: Candidate) => {
           <div className="absolute -bottom-2 -right-2 w-8 h-8 bg-gradient-to-tl from-[#0F0B0B]/5 to-transparent rounded-full" />
 
           <div className="flex items-center space-x-4 max-w-4xl mx-auto relative">
-            <Button
+            {/* <Button
               variant="outline"
               size="sm"
               className="p-3 border-gray-200 hover:border-[#86BC25] hover:bg-[#86BC25]/5 transition-all duration-200 shadow-sm hover:shadow-md bg-transparent group"
             >
               <Paperclip className="w-4 h-4 text-gray-600 group-hover:text-[#86BC25]" />
-            </Button>
+            </Button> */}
 
             
 
