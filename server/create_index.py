@@ -21,7 +21,7 @@ me_index = aiplatform.MatchingEngineIndex.create_tree_ah_index(
     dimensions=DIMENSIONS,
     approximate_neighbors_count=150,
     distance_measure_type="DOT_PRODUCT_DISTANCE",
-    index_update_method="STREAM_UPDATE",   # or "BATCH_UPDATE"
+    index_update_method="BATCH_UPDATE",   # or "STREAM_UPDATE: analyze the benefits and use case but BATCH_UPDATE based on the analyzed conceptual use case"
 )
 
 # Create endpoint and deploy the index
